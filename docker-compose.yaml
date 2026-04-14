@@ -41,5 +41,20 @@ services:
     # Run once then exit (mirrors CronJob behaviour)
     profiles: ["scrape"]
 
+  summarizer:
+    build:
+      context: .
+      dockerfile: summarizer/Dockerfile
+    environment:
+      DB_URL: postgres://acurve:acurve@postgres:5432/acurve
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      BATCH_SIZE: ${BATCH_SIZE:-20}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Run once then exit (mirrors CronJob behaviour)
+    profiles: ["summarize"]
+
 volumes:
   postgres_data:

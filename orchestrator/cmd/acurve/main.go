@@ -16,6 +16,7 @@ import (
 
 	"github.com/Konk32/acurve/orchestrator/internal/api"
 	"github.com/Konk32/acurve/orchestrator/internal/db"
+	"github.com/Konk32/acurve/orchestrator/internal/discord"
 )
 
 func main() {
@@ -48,7 +49,15 @@ func run() error {
 	defer pool.Close()
 
 	store := db.NewStore(pool)
-	handler := api.NewServer(store)
+
+	var discordClient *discord.Client
+	if webhookURL := os.Getenv("DISCORD_WEBHOOK_URL"); webhookURL != "" {
+		discordClient = discord.NewClient(webhookURL)
+	} else {
+		slog.Warn("DISCORD_WEBHOOK_URL not set — digest send will be a no-op")
+	}
+
+	handler := api.NewServer(store, discordClient)
 
 	srv := &http.Server{
 		Addr:         ":" + port,

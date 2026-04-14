@@ -1,0 +1,21 @@
+[project]
+name = "acurve-summarizer"
+version = "0.1.0"
+description = "acurve summarizer — calls LLM to score and summarise scraped items"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.40",
+    "psycopg[binary]>=3.2",
+    "structlog>=24.0",
+]
+
+[project.scripts]
+acurve-summarizer = "acurve_summarizer.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
