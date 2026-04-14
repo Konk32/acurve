@@ -1,0 +1,26 @@
+plan.md
+
+# Go
+orchestrator/acurve
+*.exe
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+.ruff_cache/
+
+# Local env / secrets
+.env
+.env.local
+*.sops.yaml
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Docker
+.dockerignore

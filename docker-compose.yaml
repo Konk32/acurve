@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: acurve
+      POSTGRES_PASSWORD: acurve
+      POSTGRES_DB: acurve
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acurve"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    environment:
+      DB_URL: postgres://acurve:acurve@postgres:5432/acurve
+      MIGRATIONS_DIR: /migrations
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  scraper:
+    build:
+      context: .
+      dockerfile: scraper/Dockerfile
+    environment:
+      DB_URL: postgres://acurve:acurve@postgres:5432/acurve
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Run once then exit (mirrors CronJob behaviour)
+    profiles: ["scrape"]
+
+volumes:
+  postgres_data:
