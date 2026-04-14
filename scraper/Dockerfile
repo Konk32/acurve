@@ -5,7 +5,11 @@ WORKDIR /build
 RUN pip install --no-cache-dir uv
 
 COPY scraper/pyproject.toml ./
-RUN uv pip install --system --no-cache .
+# Create a minimal stub so hatchling can resolve the package during the
+# deps-only install. The real source is copied in the final stage.
+RUN mkdir -p acurve_scraper && touch acurve_scraper/__init__.py && \
+    uv pip install --system --no-cache . && \
+    rm -rf acurve_scraper
 
 # ---
 FROM python:3.12-slim
