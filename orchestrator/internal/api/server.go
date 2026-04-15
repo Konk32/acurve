@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Konk32/acurve/orchestrator/internal/dashboard"
 	"github.com/Konk32/acurve/orchestrator/internal/db"
 	"github.com/Konk32/acurve/orchestrator/internal/digest"
 	"github.com/Konk32/acurve/orchestrator/internal/discord"
@@ -31,6 +32,15 @@ func NewServer(store *db.Store, discordClient *discord.Client) http.Handler {
 	r.Use(middleware.Logger)
 
 	r.Get("/healthz", s.handleHealth)
+
+	// HTMX dashboard
+	dash, err := dashboard.NewHandler(store)
+	if err != nil {
+		// Templates are embedded at compile time; a parse error is a programmer mistake.
+		panic("dashboard template parse error: " + err.Error())
+	}
+	r.Get("/", dash.HandleIndex)
+	r.Mount("/dashboard", dash.Routes())
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/sources", s.handleListSources)

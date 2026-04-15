@@ -5,6 +5,7 @@ description = "acurve summarizer — calls LLM to score and summarise scraped it
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.40",
+    "httpx>=0.27",
     "psycopg[binary]>=3.2",
     "structlog>=24.0",
 ]

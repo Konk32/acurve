@@ -1,28 +1,31 @@
 """
-LLM summarisation using the Anthropic Messages API.
+Pluggable LLM backend for summarisation.
 
-The system prompt is marked with cache_control so it is only transmitted
-(and billed at full rate) on the first call; subsequent calls in the same
-batch re-use the cached prefix at ~10% of the input token cost.
+Providers
+---------
+anthropic (default)
+    Calls the Anthropic Messages API with prompt caching on the system prompt.
+    Requires: ANTHROPIC_API_KEY, ANTHROPIC_MODEL (default claude-haiku-4-5-20251001)
 
-Model: claude-haiku-4-5-20251001  (fast, cheap, good enough for classification)
+ollama
+    Calls a local Ollama instance via its REST API.  Useful when the Anthropic
+    API is unavailable or for cost-free local testing with Gemma 3 / other models.
+    Requires: OLLAMA_URL (e.g. http://10.0.0.1:11434), OLLAMA_MODEL (default gemma3:12b)
 """
 
 from __future__ import annotations
 
 import json
-import os
 from typing import TypedDict
 
 import anthropic
+import httpx
 import structlog
 
 log = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
-# System prompt — intentionally detailed so it exceeds the 2 048-token cache
-# minimum for claude-haiku-4-5, enabling effective prompt caching across all
-# items processed in a single summariser run.
+# System prompt — shared by both providers.
 # ---------------------------------------------------------------------------
 _SYSTEM_PROMPT = """
 You are a technical news filter for an IT-focused developer and homelab enthusiast.
@@ -137,19 +140,42 @@ def summarise(
     raw_content: str | None,
     captions: str | None,
     top_comments: list | None,
+    provider: str,
     model: str,
-    api_key: str,
+    api_key: str | None = None,
+    ollama_url: str | None = None,
 ) -> Summary:
     """
-    Call the Anthropic Messages API to produce a summary, category, and score.
+    Summarise a single item using the configured LLM provider.
 
-    The system prompt is cached via cache_control; only the per-item user
-    message varies, so repeated calls within a run read the system prompt
-    from the cache at ~10 % of normal input token cost.
+    provider="anthropic": uses Anthropic Messages API (api_key required)
+    provider="ollama":    uses local Ollama REST API (ollama_url required)
     """
-    client = anthropic.Anthropic(api_key=api_key)
+    user_content = _build_user_content(title, url, raw_content, captions, top_comments)
 
-    # Build the user message from available content
+    if provider == "anthropic":
+        if not api_key:
+            raise ValueError("api_key is required for the anthropic provider")
+        return _summarise_anthropic(user_content, model=model, api_key=api_key)
+    elif provider == "ollama":
+        if not ollama_url:
+            raise ValueError("ollama_url is required for the ollama provider")
+        return _summarise_ollama(user_content, model=model, ollama_url=ollama_url)
+    else:
+        raise ValueError(f"unknown provider {provider!r} — expected 'anthropic' or 'ollama'")
+
+
+# ---------------------------------------------------------------------------
+# Internals
+# ---------------------------------------------------------------------------
+
+def _build_user_content(
+    title: str,
+    url: str,
+    raw_content: str | None,
+    captions: str | None,
+    top_comments: list | None,
+) -> str:
     parts = [f"Title: {title}", f"URL: {url}"]
 
     if raw_content:
@@ -166,44 +192,13 @@ def summarise(
         parts.append(f"Top comments:\n{comments_text}")
 
     if len(parts) <= 2:
-        # No content at all beyond title+URL — still try with just those
         parts.append("(no body content available)")
 
-    user_content = "\n\n".join(parts)
+    return "\n\n".join(parts)
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=512,
-        system=[
-            {
-                "type": "text",
-                "text": _SYSTEM_PROMPT,
-                # Cache the system prompt across all items in this run.
-                # Minimum cacheable prefix for claude-haiku-4-5 is 2 048 tokens;
-                # this prompt is ~850 tokens so caching will be attempted but may
-                # not activate on every model tier. Still worth including for
-                # correctness and future-proofing.
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
-        messages=[{"role": "user", "content": user_content}],
-    )
 
-    cache_read = response.usage.cache_read_input_tokens or 0
-    cache_created = response.usage.cache_creation_input_tokens or 0
-    log.debug(
-        "llm usage",
-        input_tokens=response.usage.input_tokens,
-        output_tokens=response.usage.output_tokens,
-        cache_read=cache_read,
-        cache_created=cache_created,
-    )
-
-    text = next(
-        (b.text for b in response.content if b.type == "text"),
-        "{}",
-    )
-
+def _parse_json(text: str) -> Summary:
+    """Parse the JSON blob returned by either provider."""
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
@@ -221,3 +216,79 @@ def summarise(
         score=int(data.get("score", 0)),
         reasoning=str(data.get("reasoning", "")),
     )
+
+
+def _summarise_anthropic(user_content: str, *, model: str, api_key: str) -> Summary:
+    """
+    Call Anthropic Messages API with prompt caching on the system prompt.
+
+    Minimum cacheable prefix for claude-haiku-4-5 is 2 048 tokens; this
+    prompt is ~850 tokens, so caching activates on Sonnet/Opus tiers and
+    is attempted (but may not activate) on Haiku.  Still worth including
+    for correctness and future-proofing.
+    """
+    client = anthropic.Anthropic(api_key=api_key)
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=512,
+        system=[
+            {
+                "type": "text",
+                "text": _SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
+        messages=[{"role": "user", "content": user_content}],
+    )
+
+    cache_read = response.usage.cache_read_input_tokens or 0
+    cache_created = response.usage.cache_creation_input_tokens or 0
+    log.debug(
+        "anthropic usage",
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+        cache_read=cache_read,
+        cache_created=cache_created,
+    )
+
+    text = next((b.text for b in response.content if b.type == "text"), "{}")
+    return _parse_json(text)
+
+
+def _summarise_ollama(user_content: str, *, model: str, ollama_url: str) -> Summary:
+    """
+    Call a local Ollama instance via its /api/chat endpoint.
+
+    format="json" instructs Ollama to constrain the output to valid JSON,
+    which removes the need for fence-stripping.
+    """
+    url = ollama_url.rstrip("/") + "/api/chat"
+
+    payload = {
+        "model": model,
+        "stream": False,
+        "format": "json",
+        "messages": [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+    }
+
+    try:
+        resp = httpx.post(url, json=payload, timeout=120.0)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"ollama request failed: {exc}") from exc
+
+    data = resp.json()
+    text = data.get("message", {}).get("content", "{}")
+
+    log.debug(
+        "ollama usage",
+        model=model,
+        prompt_tokens=data.get("prompt_eval_count"),
+        completion_tokens=data.get("eval_count"),
+    )
+
+    return _parse_json(text)

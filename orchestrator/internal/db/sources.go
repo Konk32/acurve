@@ -32,6 +32,25 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+func (s *Store) GetSource(ctx context.Context, id int) (Source, error) {
+	var src Source
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, kind, url, name, enabled,
+		       scrape_interval::text, last_scraped_at, created_at
+		FROM sources WHERE id = $1
+	`, id).Scan(
+		&src.ID, &src.Kind, &src.URL, &src.Name, &src.Enabled,
+		&src.ScrapeInterval, &src.LastScrapedAt, &src.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Source{}, fmt.Errorf("get source %d: %w", id, ErrNotFound)
+		}
+		return Source{}, fmt.Errorf("get source %d: %w", id, err)
+	}
+	return src, nil
+}
+
 func (s *Store) ListSources(ctx context.Context) ([]Source, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, kind, url, name, enabled,

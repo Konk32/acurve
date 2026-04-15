@@ -3,6 +3,22 @@ acurve summarizer — entry point.
 
 Picks up unsummarised items from Postgres, calls the LLM, and writes
 summaries back. Designed to run to completion and exit (CronJob / one-shot).
+
+Environment variables
+---------------------
+DB_URL              (required) PostgreSQL connection string
+LLM_PROVIDER        "anthropic" (default) or "ollama"
+
+Anthropic provider:
+  ANTHROPIC_API_KEY  (required)
+  ANTHROPIC_MODEL    default: claude-haiku-4-5-20251001
+
+Ollama provider:
+  OLLAMA_URL         (required) e.g. http://10.0.0.1:11434
+  OLLAMA_MODEL       default: gemma3:12b
+
+Common:
+  BATCH_SIZE         items per run, default 50
 """
 
 from __future__ import annotations
@@ -36,11 +52,24 @@ def main() -> None:
     )
 
     db_url = _require("DB_URL")
-    api_key = _require("ANTHROPIC_API_KEY")
-    model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+    provider = os.environ.get("LLM_PROVIDER", "anthropic")
     batch_size = int(os.environ.get("BATCH_SIZE", "50"))
 
-    log.info("summarizer starting", model=model, batch_size=batch_size)
+    # Resolve provider-specific config.
+    api_key: str | None = None
+    ollama_url: str | None = None
+
+    if provider == "anthropic":
+        api_key = _require("ANTHROPIC_API_KEY")
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+    elif provider == "ollama":
+        ollama_url = _require("OLLAMA_URL")
+        model = os.environ.get("OLLAMA_MODEL", "gemma3:12b")
+    else:
+        log.error("unknown LLM_PROVIDER", provider=provider)
+        sys.exit(1)
+
+    log.info("summarizer starting", provider=provider, model=model, batch_size=batch_size)
 
     try:
         conn = db.connect(db_url)
@@ -70,8 +99,10 @@ def main() -> None:
                     raw_content=item.get("raw_content"),
                     captions=item.get("captions"),
                     top_comments=item.get("top_comments"),
+                    provider=provider,
                     model=model,
                     api_key=api_key,
+                    ollama_url=ollama_url,
                 )
             except Exception as exc:
                 log.error("llm call failed", item_id=item_id, exc=str(exc))

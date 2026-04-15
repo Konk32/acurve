@@ -47,8 +47,13 @@ services:
       dockerfile: summarizer/Dockerfile
     environment:
       DB_URL: postgres://acurve:acurve@postgres:5432/acurve
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      # Anthropic provider (default)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      # Ollama provider (set LLM_PROVIDER=ollama)
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:12b}
       BATCH_SIZE: ${BATCH_SIZE:-20}
     depends_on:
       postgres:

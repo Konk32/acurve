@@ -94,8 +94,13 @@ spec:
               repository: ghcr.io/konk32/acurve-summarizer
               tag: main
             env:
-              ANTHROPIC_MODEL: "claude-haiku-4-5-20251001"
               BATCH_SIZE: "20"
+              # Switch provider here; set the matching vars in acurve-secrets.
+              # anthropic: set ANTHROPIC_API_KEY + optionally ANTHROPIC_MODEL
+              # ollama:    set OLLAMA_URL + optionally OLLAMA_MODEL
+              LLM_PROVIDER: "anthropic"
+              ANTHROPIC_MODEL: "claude-haiku-4-5-20251001"
+              OLLAMA_MODEL: "gemma3:12b"
             envFrom:
               - secretRef:
                   name: acurve-secrets
