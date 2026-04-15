@@ -15,7 +15,9 @@ dist/
 # Local env / secrets
 .env
 .env.local
-*.sops.yaml
+# age private key — NEVER commit this
+age.key
+*.agekey
 
 # Editor
 .idea/

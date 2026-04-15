@@ -1,0 +1,26 @@
+---
+# CNPG Cluster — single instance, 5 GiB storage.
+# The operator creates two Services:
+#   acurve-postgres-rw  (read-write, primary)
+#   acurve-postgres-ro  (read-only replicas — unused at instance count 1)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: acurve-postgres
+  namespace: acurve
+spec:
+  instances: 1
+
+  storage:
+    size: 5Gi
+
+  bootstrap:
+    initdb:
+      database: acurve
+      owner: acurve
+      secret:
+        name: acurve-postgres-credentials
+
+  # Keep one base backup; retention will grow over time.
+  backup:
+    retentionPolicy: "7d"

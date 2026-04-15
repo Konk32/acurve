@@ -1,0 +1,19 @@
+---
+# Drop this into your cluster-config repo (e.g. clusters/main/apps/acurve.yaml).
+# It tells Flux to reconcile deploy/base/ from the acurve repo.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: acurve
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./deploy/base
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system   # or whichever GitRepository points at github.com/Konk32/acurve
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age    # adjust to your SOPS key secret name

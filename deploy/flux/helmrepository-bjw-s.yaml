@@ -1,0 +1,10 @@
+---
+# Add this to your cluster-config if bjw-s/app-template is not already sourced.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: bjw-s
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: https://bjw-s.github.io/helm-charts
