@@ -25,10 +25,7 @@ type Handler struct {
 
 // NewHandler parses the embedded templates and returns a Handler.
 func NewHandler(store *db.Store) (*Handler, error) {
-	funcMap := template.FuncMap{
-		"not": func(v bool) bool { return !v },
-	}
-	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
+	tmpl, err := template.New("").ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}

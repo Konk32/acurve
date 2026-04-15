@@ -210,10 +210,15 @@ def _parse_json(text: str) -> Summary:
             reasoning="LLM returned non-JSON output.",
         )
 
+    try:
+        score = max(0, min(100, int(data.get("score", 0))))
+    except (TypeError, ValueError):
+        score = 0
+
     return Summary(
         summary=str(data.get("summary", "")),
         category=str(data.get("category", "other")),
-        score=int(data.get("score", 0)),
+        score=score,
         reasoning=str(data.get("reasoning", "")),
     )
 

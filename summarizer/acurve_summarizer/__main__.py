@@ -53,7 +53,7 @@ def main() -> None:
 
     db_url = _require("DB_URL")
     provider = os.environ.get("LLM_PROVIDER", "anthropic")
-    batch_size = int(os.environ.get("BATCH_SIZE", "50"))
+    batch_size = int(os.environ.get("BATCH_SIZE", "20"))
 
     # Resolve provider-specific config.
     api_key: str | None = None

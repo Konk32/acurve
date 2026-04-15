@@ -73,7 +73,6 @@ def main() -> None:
                 except Exception as exc:
                     log.error("upsert failed", title=item.get("title"), exc=str(exc))
 
-            conn.commit()
             db.mark_source_scraped(conn, source["id"])
             conn.commit()
             total_new += new_count
